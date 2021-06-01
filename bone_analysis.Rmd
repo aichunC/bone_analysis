@@ -1,0 +1,103 @@
+---
+title: "bone"
+author: '@Sky013088'
+date: "5/31/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+#library(MASS)
+```
+
+## discrtion of the study and the variables in the dataset 
+
+* Subject: We retrospectively obtained 53 QCT scans with contrast (80–120 kVp, 25–145 mAs, 0.227–0.611 mm  pixel size, 1–4 mm slice thickness, standard reconstruction) of 40 male and 13 female subjects less than 5yo (mean age 3.1 y, range 0.6 to 4.87 y; 26 Caucasian non-Hispanic, 18 Hispanic, 2 Asian/Pacific, 1 African American, 5 Other, and 1 Unavailable).So we probably don't even have enough female subjects to compare male and female. However, there are other studies that have shown that male and female bones at this age are not different. I'm wondering if we should/could report the 95% confidence interval of the difference between male and female values of the dependent variables.I have to look at the data for race/ethnicity again because I think I didn't address Hispanic/non-hispanic correctly. In any case, we have a lot of Caucasians. Maybe you can look at Caucasian non-hispanic vs Caucasian hispanic
+
+* race and  ethnicity as independent variables : it is a good idea to leave ethnicity out of the initial analysis. Race and Ethnicity is an interesting but much more complicate issue to do data analysis. Since we only have 56 or 57 subjects, if we don’t have enough data for all categories, perhaps we can check the dataset and see if we have enough data for the top 1-4 categories and do some comparison analysis. if  race in our dataset is too widespread, perhaps we can skip this independent variable. 
+
+*CT Scan parameters as independent variable ( kVp, slice thickness, slice spacing, others )things like age, height, weight, sex are obviously important independent variables;  CT scan parameters such as slice thickness various with each individual subject should be take into account in the initial steps. My idea is probably silly, but can we identify the most significant CT scan parameters like slice thickness, and after that average them for each subject before the initial regression analysis of  other independent variables ? 
+
+
+*An interaction would mean that the effect of an independent variable on the “bone measure” depends on another independent variable. All our independent variables are:
+Sex, age, weight, height, and BMI (and potentially, CT scan parameters).
+ 
+Possible interactions:
+1.       Sex*age – effect of age differs for male and female
+2.       Sex*(weight, height or BMI) – effect of those parameters depend on sex
+3.       Age*weight – effect of age depends on weight
+4.       And so on
+
+## Discription Data 
+
+
+```{r }
+# summary of discriptive data including max, min, median, mean, swilk, sd
+# for dataset L1 (extract from the main dataset )
+load(file="mydata.rdata")
+mydata2 <- mydata %>% dplyr::select(-c(1,2,3))
+
+m=matrix(0,ncol=8,nrow=ncol(mydata2)) %>% as.tibble()
+
+ m$V1<- colnames(mydata2)
+colnames(m) <- c( "rownames","max","min","mean","median","sd","swilk","N")
+
+m$max=mydata2 %>% map_dbl(~max(.x,na.rm=TRUE))
+m$min=mydata2 %>% map_dbl(~min(.x,na.rm=TRUE))
+m$mean=mydata2 %>% map_dbl(~mean(.x,na.rm=TRUE))
+m$median=mydata2 %>% map_dbl(~median(.x,na.rm=TRUE))
+m$sd =mydata2 %>% map_dbl(~sd(.x,na.rm=TRUE))
+m$swilk = mydata2 %>% map_dbl(~shapiro.test(.x)%>%pluck("p.value"))
+m$N=mydata2 %>% map_dbl(~na.exclude(.x)%>% length())  # do not write length(.x)
+```
+
+# Build a model using stepwise backward method 
+
+```{r}
+library(MASS)
+#Define data variables 
+#independt variable
+
+sex <- mydata$`Sex (M=0, F=1)`
+sAge <- mydata$`Age (Years)`
+sWeight <- mydata$`Weight (kg)`
+sHeight <- mydata$`Height/Length (cm)`
+sBMI <- mydata$BMI
+
+#dependent variable 
+
+sBMD_L1 <- mydata$`BMD w/ contrast`
+sBMC_L1 <- mydata$`BMC w/ contrast`
+sVol_L1 <-log(mydata$`Volume w/ contrast`)
+sCarea_L1 <- mydata$`Cross Sectional Area` 
+sMBMD_L1 <-mydata$`Mid BMD w/ contrast`
+sVheight_L1 <-mydata$`Vertebral Height`
+
+# do a fit linear model 
+fit <- lm(formula = log10(sBMC_L1) ~ sAge + sWeight + sAge:sWeight, data = mydata)
+
+#do the backward stepwise selection 
+step <- stepAIC(fit, direction="backward")
+
+#show results for anova table 
+step$anova
+
+# summary(step) 
+# shows the coefficient 
+
+#plot(step)
+#shows four different graph. 
+
+#constant variance test
+#ncvTest(step)
+```
+
+# some conclusion from our analysis
+
+ 
+1.As a result of our study, we have found that BMD and mid BMD do not change with age, weight, height or BMI. This is a very important result. When the children get older, BMD increases with age, but not before then. We can also check to see if BMD or mid BMD are correlated with the CT scan parameters, but we will do that later. I don’t think BMD will change with those parameters either (but I could be wrong). There may be differences between races, but I don’t think we have enough subjects to find that. If you want, and if you have the race data, you can try that out. I don’t remember if I gave you the race data. Also, when you do the regression for BMD, you don’t need to take the log if BMD is normally distributed. The reason we took the log of vol and BMC is that, when we did the regression analysis, the residuals were not normally distributed about the regression line. Along those lines, you should do regressions of BMD versus age, weight, etc.
+ 
+2. That is very interesting and surprising that sex is significant in the regressions for cross-sectional area and vertebral height. It is also interesting that the coefficients for cross-sectional area and vertebral height have opposite signs. That might explain why we didn’t find a difference in volume (I think). However, there are so many significant terms and also interactions that it may not be that simple. As I explained in #1, you may also want to try the regressions without first taking the log to see if the data are normally distributed about the regression line. If cross-sectional area and height aren’t normally distributed about the regression lines, then you have to take the log.
